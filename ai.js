@@ -1,18 +1,41 @@
-// ai.js — PURE LOGIC ONLY
+// ai.js — REAL AI LOGIC USING GROQ API
 
 export class AIEngine {
   constructor(config = {}) {
     this.memory = {};
     this.personality = config.personality || "neutral";
     this.storyMode = config.storyMode || false;
+
+    this.apiKey = config.apiKey; // REQUIRED
+    this.model = "llama3-8b-8192"; // free model
   }
 
-  setPersonality(p) {
-    this.personality = p;
-  }
+  async generate(text) {
+    const body = {
+      model: this.model,
+      messages: [
+        {
+          role: "system",
+          content: `You are a chatbot with personality: ${this.personality}. Story mode: ${this.storyMode}.`
+        },
+        {
+          role: "user",
+          content: text
+        }
+      ]
+    };
 
-  setStoryMode(on) {
-    this.storyMode = on;
+    const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${this.apiKey}`
+      },
+      body: JSON.stringify(body)
+    });
+
+    const data = await res.json();
+    return data.choices[0].message.content;
   }
 
   learn(text) {
@@ -34,28 +57,13 @@ export class AIEngine {
     return null;
   }
 
-  baseReply(text) {
-    if (this.personality === "friendly") {
-      return `Okay, so you said: "${text}". That’s interesting—tell me more.`;
-    }
-    if (this.personality === "serious") {
-      return `You said: "${text}". What is your main point?`;
-    }
-    return `I heard: "${text}". You can also tell me things like "My favorite game is Roblox".`;
-  }
-
-  storyReply(text) {
-    return `The world grew quiet as you whispered: "${text}". Somewhere, a new story began to unfold...`;
-  }
-
-  respond(text) {
+  async respond(text) {
     const learned = this.learn(text);
     if (learned) return learned;
 
     const recalled = this.recall(text);
     if (recalled) return recalled;
 
-    if (this.storyMode) return this.storyReply(text);
-    return this.baseReply(text);
+    return await this.generate(text);
   }
-        }
+}
