@@ -1,9 +1,9 @@
-// ai.js — NATURAL AI-LIKE LOGIC ENGINE (NO KEYWORDS, NO APIS)
+// ai.js — NATURAL OFFLINE LOGIC ENGINE (NO APIS)
 
 export class AIEngine {
   constructor(config = {}) {
-    this.personality = config.personality || "neutral"; 
-    this.mode = config.mode || "chat"; 
+    this.personality = config.personality || "neutral";
+    this.mode = config.mode || "chat";
     this.style = config.style || "balanced";
 
     this.memory = {
@@ -16,11 +16,7 @@ export class AIEngine {
     this.history = [];
   }
 
-  // -----------------------------
-  // INTERNAL SIGNALS (NO KEYWORDS)
-  // -----------------------------
   inferEmotion(text) {
-    // Based on writing style, punctuation, pacing
     if (text.endsWith("!")) return "excited";
     if (text.includes("...")) return "thoughtful";
     if (text.length < 10) return "casual";
@@ -29,7 +25,6 @@ export class AIEngine {
   }
 
   inferIntent(text) {
-    // Based on structure, not keywords
     if (text.length > 120) return "ramble";
     if (text.includes("?")) return "curious";
     if (text.startsWith("I")) return "personal";
@@ -38,7 +33,6 @@ export class AIEngine {
   }
 
   inferTopic(text) {
-    // Extract nouns as topics
     const words = text.split(/\s+/);
     const nouns = words.filter(w => /^[A-Za-z]+$/.test(w) && w.length > 3);
     const topic = nouns[nouns.length - 1] || null;
@@ -51,22 +45,14 @@ export class AIEngine {
     return topic;
   }
 
-  // -----------------------------
-  // MEMORY (NATURAL, NOT KEYWORD)
-  // -----------------------------
   updateImpression(text) {
     const topic = this.memory.lastTopic;
     if (!topic) return;
-
-    // Build impressions based on tone
     const tone = this.inferEmotion(text);
     this.memory.impressions[topic] = tone;
   }
 
-  // -----------------------------
-  // RESPONSE GENERATORS
-  // -----------------------------
-  generateChat(text, topic, emotion, intent) {
+  generateChat(text, topic, emotion) {
     const toneMap = {
       neutral: "Alright, I’m following you.",
       excited: "You’ve got some energy behind that.",
@@ -76,7 +62,6 @@ export class AIEngine {
     };
 
     const base = toneMap[emotion] || toneMap.neutral;
-
     return `${base} You’re talking about ${topic || "something interesting"}. Tell me more about where your head’s at.`;
   }
 
@@ -100,28 +85,14 @@ export class AIEngine {
     return `The moment you said "${text}", the scene shifted.\n\nA quiet spark lit inside the world, centered around ${topic || "something undefined"}. If this were the beginning of a story, what would happen next?`;
   }
 
-  // -----------------------------
-  // STYLE SHAPING
-  // -----------------------------
   shapeStyle(reply) {
-    if (this.style === "short") {
-      return reply.split(".")[0] + ".";
-    }
-    if (this.style === "long") {
-      return reply + "\n\nIf you want, we can go deeper.";
-    }
-    if (this.style === "casual") {
-      return reply.replace("You’re", "You're kinda").replace("What does", "What’s");
-    }
-    if (this.style === "formal") {
-      return reply.replace("Alright", "Understood").replace("Gotcha", "I see");
-    }
+    if (this.style === "short") return reply.split(".")[0] + ".";
+    if (this.style === "long") return reply + "\n\nIf you want, we can go deeper.";
+    if (this.style === "casual") return reply.replace("You’re", "You're kinda");
+    if (this.style === "formal") return reply.replace("Alright", "Understood");
     return reply;
   }
 
-  // -----------------------------
-  // MAIN RESPONDER
-  // -----------------------------
   async respond(text) {
     this.history.push({ role: "user", text });
 
@@ -132,7 +103,6 @@ export class AIEngine {
     this.updateImpression(text);
 
     let reply;
-
     if (this.mode === "storyteller") {
       reply = this.generateStory(text, topic);
     } else {
@@ -141,7 +111,7 @@ export class AIEngine {
         case "personal": reply = this.generatePersonal(text, topic); break;
         case "reflective": reply = this.generateReflective(text, topic); break;
         case "ramble": reply = this.generateRamble(text, topic); break;
-        default: reply = this.generateChat(text, topic, emotion, intent);
+        default: reply = this.generateChat(text, topic, emotion);
       }
     }
 
@@ -149,4 +119,4 @@ export class AIEngine {
     this.history.push({ role: "ai", text: shaped });
     return shaped;
   }
-  }
+}
