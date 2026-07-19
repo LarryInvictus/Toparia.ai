@@ -1,8 +1,8 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Free AI Bot Platform</title>
+<title>Offline AI Bot Platform</title>
 <style>
   body {
     margin:0; padding:0;
@@ -11,13 +11,14 @@
   }
   .container {
     display:grid;
-    grid-template-columns: 300px 1fr;
+    grid-template-columns: 320px 1fr;
     height:100vh;
   }
   .sidebar {
     background:#020617;
     padding:16px;
     overflow-y:auto;
+    border-right:1px solid #1f2937;
   }
   .main {
     background:#0b1120;
@@ -25,16 +26,18 @@
     display:flex;
     flex-direction:column;
   }
-  .section-title {
-    font-size:1.2rem;
-    margin-bottom:8px;
-  }
+  h2 { margin:0 0 8px 0; }
+  h3 { margin:12px 0 6px 0; }
   .bot-card {
     background:#111827;
     padding:10px;
     border-radius:8px;
     margin-bottom:8px;
     cursor:pointer;
+    font-size:0.9rem;
+  }
+  .bot-card.active {
+    border:1px solid #38bdf8;
   }
   .chat-log {
     flex:1;
@@ -43,6 +46,7 @@
     padding:10px;
     border-radius:8px;
     margin-bottom:10px;
+    font-size:0.9rem;
   }
   .msg-user { color:#a5b4fc; margin-bottom:6px; }
   .msg-ai { color:#22c55e; margin-bottom:6px; }
@@ -54,6 +58,7 @@
     background:#1f2937;
     color:white;
     border:none;
+    font-size:0.85rem;
   }
   button {
     padding:8px;
@@ -62,6 +67,12 @@
     border-radius:6px;
     cursor:pointer;
     font-weight:bold;
+    font-size:0.85rem;
+  }
+  .disclaimer {
+    font-size:0.75rem;
+    color:#9ca3af;
+    margin-top:4px;
   }
 </style>
 </head>
@@ -69,36 +80,42 @@
 
 <div class="container">
 
-  <!-- LEFT PANEL -->
+  <!-- LEFT: Discover + Bot list + Creator -->
   <div class="sidebar">
-    <h2 class="section-title">Discover</h2>
+    <h2>Discover</h2>
+    <div class="disclaimer">
+      Featured bots are auto-generated and may not represent real users.
+    </div>
     <div id="discover"></div>
 
-    <hr style="margin:16px 0;">
-
-    <h2 class="section-title">Your Bots</h2>
+    <h3>Your Bots</h3>
     <div id="botList"></div>
 
-    <hr style="margin:16px 0;">
-
-    <h2>Create Bot</h2>
+    <h3>Create Bot</h3>
     <input id="botName" placeholder="Bot name">
     <select id="botPersonality">
       <option value="neutral">Neutral</option>
       <option value="friendly">Friendly</option>
       <option value="serious">Serious</option>
+      <option value="chaotic">Chaotic</option>
     </select>
-    <select id="botStoryMode">
-      <option value="false">Story Mode Off</option>
-      <option value="true">Story Mode On</option>
+    <select id="botMode">
+      <option value="chat">Chat</option>
+      <option value="storyteller">Storyteller</option>
     </select>
-    <input id="apiKey" placeholder="Groq API Key">
+    <select id="botStyle">
+      <option value="balanced">Balanced</option>
+      <option value="short">Short</option>
+      <option value="long">Long</option>
+      <option value="casual">Casual</option>
+      <option value="formal">Formal</option>
+    </select>
     <button id="createBotBtn">Create Bot</button>
   </div>
 
-  <!-- RIGHT PANEL -->
+  <!-- RIGHT: Chat -->
   <div class="main">
-    <h2 id="activeBotName">Select a bot</h2>
+    <h2 id="activeBotTitle">Select a bot</h2>
     <div class="chat-log" id="chatLog"></div>
     <input id="chatInput" placeholder="Say something...">
     <button id="sendBtn">Send</button>
@@ -109,81 +126,130 @@
 <script type="module">
   import { AIEngine } from './ai.js';
 
-  const discoverEl = document.getElementById("discover");
-  const botListEl = document.getElementById("botList");
-  const chatLogEl = document.getElementById("chatLog");
-  const activeBotNameEl = document.getElementById("activeBotName");
+  const discoverEl = document.getElementById('discover');
+  const botListEl = document.getElementById('botList');
+  const chatLogEl = document.getElementById('chatLog');
+  const activeBotTitleEl = document.getElementById('activeBotTitle');
+  const chatInputEl = document.getElementById('chatInput');
 
-  const bots = {};
-  let activeBot = null;
+  const createBotBtn = document.getElementById('createBotBtn');
+  const sendBtn = document.getElementById('sendBtn');
 
-  function addDiscoverBots() {
-    discoverEl.innerHTML = "";
-    const sample = ["StoryWeaver", "DreamGuide", "NovaAI", "EchoMind"];
-    sample.forEach(name => {
-      const div = document.createElement("div");
-      div.className = "bot-card";
-      div.textContent = name;
-      discoverEl.appendChild(div);
+  let bots = {};
+  let activeBotId = null;
+
+  function loadBots() {
+    const raw = localStorage.getItem('offlineBots');
+    if (!raw) return;
+    const data = JSON.parse(raw);
+    bots = {};
+    Object.keys(data).forEach(id => {
+      const b = data[id];
+      bots[id] = {
+        ...b,
+        engine: new AIEngine({
+          personality: b.personality,
+          mode: b.mode,
+          style: b.style
+        })
+      };
     });
   }
 
-  addDiscoverBots();
+  function saveBots() {
+    const plain = {};
+    Object.keys(bots).forEach(id => {
+      const { name, personality, mode, style, chats } = bots[id];
+      plain[id] = { name, personality, mode, style, chats };
+    });
+    localStorage.setItem('offlineBots', JSON.stringify(plain));
+  }
 
   function renderBots() {
-    botListEl.innerHTML = "";
-    Object.values(bots).forEach(bot => {
-      const div = document.createElement("div");
-      div.className = "bot-card";
-      div.textContent = bot.name;
+    botListEl.innerHTML = '';
+    Object.keys(bots).forEach(id => {
+      const bot = bots[id];
+      const div = document.createElement('div');
+      div.className = 'bot-card' + (id === activeBotId ? ' active' : '');
+      div.textContent = `${bot.name} • chats: ${bot.chats || 0}`;
       div.onclick = () => {
-        activeBot = bot;
-        activeBotNameEl.textContent = bot.name;
-        chatLogEl.innerHTML = "";
+        activeBotId = id;
+        activeBotTitleEl.textContent = bot.name;
+        chatLogEl.innerHTML = '';
+        renderBots();
       };
       botListEl.appendChild(div);
     });
   }
 
-  document.getElementById("createBotBtn").onclick = () => {
-    const name = document.getElementById("botName").value.trim();
-    const personality = document.getElementById("botPersonality").value;
-    const storyMode = document.getElementById("botStoryMode").value === "true";
-    const apiKey = document.getElementById("apiKey").value.trim();
-
-    if (!name || !apiKey) return alert("Bot name and API key required.");
-
-    const engine = new AIEngine({ personality, storyMode, apiKey });
-
-    bots[name] = {
-      name,
-      engine
-    };
-
-    renderBots();
-  };
+  function addDiscoverBots() {
+    discoverEl.innerHTML = '';
+    const featured = [
+      { name: 'StoryWeaver', desc: 'Auto-generated storytelling bot.' },
+      { name: 'DeepThinker', desc: 'Auto-generated reflective bot.' },
+      { name: 'ChaosMuse', desc: 'Auto-generated chaotic chat bot.' }
+    ];
+    featured.forEach(f => {
+      const div = document.createElement('div');
+      div.className = 'bot-card';
+      div.textContent = `${f.name} — ${f.desc}`;
+      discoverEl.appendChild(div);
+    });
+  }
 
   function addMsg(text, type) {
-    const div = document.createElement("div");
-    div.className = type === "user" ? "msg-user" : "msg-ai";
-    div.textContent = (type === "user" ? "You: " : "Bot: ") + text;
+    const div = document.createElement('div');
+    div.className = type === 'user' ? 'msg-user' : 'msg-ai';
+    div.textContent = (type === 'user' ? 'You: ' : 'Bot: ') + text;
     chatLogEl.appendChild(div);
     chatLogEl.scrollTop = chatLogEl.scrollHeight;
   }
 
-  document.getElementById("sendBtn").onclick = async () => {
-    if (!activeBot) return;
+  createBotBtn.onclick = () => {
+    const name = document.getElementById('botName').value.trim();
+    const personality = document.getElementById('botPersonality').value;
+    const mode = document.getElementById('botMode').value;
+    const style = document.getElementById('botStyle').value;
 
-    const text = document.getElementById("chatInput").value.trim();
+    if (!name) return;
+
+    const id = Date.now().toString();
+    const engine = new AIEngine({ personality, mode, style });
+
+    bots[id] = {
+      id,
+      name,
+      personality,
+      mode,
+      style,
+      engine,
+      chats: 0
+    };
+
+    document.getElementById('botName').value = '';
+    saveBots();
+    renderBots();
+  };
+
+  sendBtn.onclick = async () => {
+    if (!activeBotId) return;
+    const bot = bots[activeBotId];
+    const text = chatInputEl.value.trim();
     if (!text) return;
 
-    addMsg(text, "user");
+    addMsg(text, 'user');
+    const reply = await bot.engine.respond(text);
+    addMsg(reply, 'ai');
 
-    const reply = await activeBot.engine.respond(text);
-    addMsg(reply, "ai");
-
-    document.getElementById("chatInput").value = "";
+    bot.chats = (bot.chats || 0) + 1;
+    chatInputEl.value = '';
+    saveBots();
+    renderBots();
   };
+
+  loadBots();
+  renderBots();
+  addDiscoverBots();
 </script>
 
 </body>
