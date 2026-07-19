@@ -1,13 +1,10 @@
-// brain.js — OFFLINE LOGIC ENGINE (math + reasoning + coherence)
+// brain.js — reasoning engine (math + structure + topic + logic)
 
-export class ThinkingEngine {
+export class BrainEngine {
   constructor() {
     this.history = [];
   }
 
-  // -----------------------------
-  // BASIC TEXT ANALYSIS
-  // -----------------------------
   tokenize(text) {
     return text
       .toLowerCase()
@@ -16,126 +13,55 @@ export class ThinkingEngine {
       .filter(Boolean);
   }
 
-  sentenceScore(text) {
+  complexity(text) {
     const tokens = this.tokenize(text);
-    const lengthScore = tokens.length;
-    const avgWordLength = tokens.reduce((a, w) => a + w.length, 0) / (tokens.length || 1);
-
-    return lengthScore * 0.6 + avgWordLength * 0.4;
+    const avgLen = tokens.reduce((a, w) => a + w.length, 0) / (tokens.length || 1);
+    return avgLen * tokens.length;
   }
 
-  structureScore(text) {
-    const punctuation = (text.match(/[.,!?]/g) || []).length;
-    const clauses = text.split(/[,.;]/).length;
-    return punctuation + clauses;
+  structure(text) {
+    const clauses = text.split(/[,.;!?]/).length;
+    return clauses;
   }
 
-  topicExtract(text) {
+  topic(text) {
     const tokens = this.tokenize(text);
     if (!tokens.length) return null;
-
-    // pick the most "dense" word (longest)
-    let topic = tokens.reduce((a, b) => (b.length > a.length ? b : a), tokens[0]);
-    return topic.length >= 4 ? topic : null;
+    return tokens.reduce((a, b) => (b.length > a.length ? b : a), tokens[0]);
   }
 
-  // -----------------------------
-  // COHERENCE CHECK
-  // -----------------------------
-  isCoherent(text) {
-    if (!text || text.length < 5) return false;
+  reasoningChain(text) {
+    const comp = this.complexity(text);
+    const struct = this.structure(text);
+    const topic = this.topic(text);
 
-    const tokens = this.tokenize(text);
-    if (tokens.length < 3) return false;
+    let base = "";
 
-    // must contain at least one relational word
-    const relational = ["because", "so", "but", "and", "while", "when"];
-    const hasRelation = tokens.some(t => relational.includes(t));
-    if (!hasRelation) return false;
+    if (comp < 20) base = "You're expressing something simple but meaningful.";
+    else if (comp < 60) base = "You're working through a layered thought.";
+    else base = "You're dealing with a complex idea.";
 
-    // must not contain gibberish patterns
-    if (/[a-z]{15,}/i.test(text)) return false;
+    let structText = "";
+    if (struct <= 2) structText = "It feels direct.";
+    else if (struct <= 4) structText = "You're connecting ideas.";
+    else structText = "You're weaving multiple thoughts together.";
 
-    // must not be repetitive nonsense
-    const unique = new Set(tokens);
-    if (unique.size <= tokens.length * 0.3) return false;
+    let topicText = topic
+      ? `The core seems to be "${topic}".`
+      : `I'm sensing a general idea, but not a specific topic.`;
 
-    return true;
+    return `${base} ${structText} ${topicText}`;
   }
 
-  // -----------------------------
-  // REASONING CHAIN
-  // -----------------------------
-  reasoningChain(userText) {
-    const tokens = this.tokenize(userText);
-    const topic = this.topicExtract(userText);
+  respond(text) {
+    this.history.push({ role: "user", text });
 
-    const score = this.sentenceScore(userText);
-    const structure = this.structureScore(userText);
+    const chain = this.reasoningChain(text);
 
-    let interpretation = "";
+    const draft = `${chain} What part matters most to you right now?`;
 
-    // interpret complexity
-    if (score < 8) {
-      interpretation = `You’re expressing something simple but meaningful.`;
-    } else if (score < 15) {
-      interpretation = `You’re laying out a thought with some structure.`;
-    } else {
-      interpretation = `You’re working through a complex idea.`;
-    }
+    this.history.push({ role: "brain", text: draft });
 
-    // interpret structure
-    let structureInterpretation = "";
-    if (structure <= 2) {
-      structureInterpretation = `It feels direct.`;
-    } else if (structure <= 4) {
-      structureInterpretation = `There’s some layering in what you're saying.`;
-    } else {
-      structureInterpretation = `You’re connecting multiple ideas together.`;
-    }
-
-    // interpret topic
-    let topicInterpretation = "";
-    if (topic) {
-      topicInterpretation = `The core of what you're talking about seems to be "${topic}".`;
-    } else {
-      topicInterpretation = `I’m picking up a general idea, but not a specific topic.`;
-    }
-
-    return `${interpretation} ${structureInterpretation} ${topicInterpretation}`;
+    return draft;
   }
-
-  // -----------------------------
-  // RESPONSE BUILDER
-  // -----------------------------
-  buildResponse(userText) {
-    const chain = this.reasoningChain(userText);
-
-    return `${chain} What part of this feels most important to you right now?`;
-  }
-
-  // -----------------------------
-  // SELF-CORRECTION LOOP
-  // -----------------------------
-  correctResponse(response, userText) {
-    if (this.isCoherent(response)) return response;
-
-    // rebuild response using fallback logic
-    const topic = this.topicExtract(userText);
-
-    return `Let me reframe that more clearly. You’re expressing something about ${topic || "your thoughts"}. What direction do you want to take this?`;
-  }
-
-  // -----------------------------
-  // MAIN RESPONDER
-  // -----------------------------
-  async respond(userText) {
-    this.history.push({ role: "user", text: userText });
-
-    let response = this.buildResponse(userText);
-    response = this.correctResponse(response, userText);
-
-    this.history.push({ role: "ai", text: response });
-    return response;
-  }
-        }
+}
